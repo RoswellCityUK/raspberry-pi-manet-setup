@@ -98,7 +98,12 @@
         mode: "0755"
 
   handlers:
-    - name: Restart Avahi
-      systemd:
-        name: avahi-daemon
-        state: restarted
+    - name: Reload systemctl and Restart Avahi
+      block:
+        - name: Reload systemctl daemon
+          shell: systemctl daemon-reload
+
+        - name: Restart Avahi
+          systemd:
+            name: avahi-daemon
+            state: restarted

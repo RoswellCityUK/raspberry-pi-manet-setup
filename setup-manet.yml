@@ -1,73 +1,104 @@
 ---
-- name: Setup BATMAN-ADV MANET on Raspberry Pis
+- name: Setup Raspberry Pi MANET Network
   hosts: manet_nodes
-  become: true
+  become: yes
+  vars:
+    manet_ip: "{{ ansible_hostvars[inventory_hostname]['manet-ip'] }}"
+    network_name: "MANET-NET"
+    frequency: "2412"
+    batman_interface: "bat0"
+
   tasks:
+    - name: Update and upgrade packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+
     - name: Install required packages
       apt:
-        name: 
+        name:
           - batctl
-          - avahi-daemon
-          - iproute2
           - iw
           - net-tools
-          - alfred
+          - avahi-daemon
+          - avahi-utils
         state: present
-        update_cache: yes
 
-    - name: Enable BATMAN-ADV kernel module
+    - name: Check wireless interface
+      shell: iw dev | grep Interface | awk '{print $2}'
+      register: wifi_interface
+
+    - name: Disable and set wireless interface to IBSS mode (Ad-Hoc)
+      shell: |
+        ip link set {{ wifi_interface }} down
+        iw dev {{ wifi_interface }} set type ibss
+        ip link set {{ wifi_interface }} up
+
+    - name: Create Ad Hoc network
+      shell: iw dev {{ wifi_interface }} ibss join "{{ network_name }}" {{ frequency }}
+
+    - name: Verify network mode
+      shell: iw dev
+      register: iw_dev_output
+    - debug:
+        msg: "{{ iw_dev_output.stdout_lines }}"
+
+    - name: Load BATMAN-ADV kernel module
+      modprobe:
+        name: batman-adv
+        state: present
+
+    - name: Ensure BATMAN-ADV module loads on boot
       lineinfile:
         path: /etc/modules
         line: "batman-adv"
         state: present
 
-    - name: Load BATMAN-ADV kernel module
-      command: modprobe batman-adv
-
-    - name: Configure Wi-Fi as Ad-Hoc mode
-      copy:
-        dest: /etc/netplan/50-cloud-init.yaml
-        content: |
-          network:
-            version: 2
-            renderer: networkd
-            ethernets:
-              eth0:
-                dhcp4: true
-                optional: true
-            wifis:
-              wlan0:
-                dhcp4: no
-                dhcp6: no
-                addresses: []
-                link-local: []
-                optional: true
-                access-points:
-                  "MANET-NETWORK":
-                    mode: adhoc
-                    password: "123456789"
-                    band: 2.4GHz
-                    channel: 6
-      notify: Apply netplan
-
-    - name: Set Wi-Fi interface type to IBSS (Ad-Hoc)
+    - name: Configure BATMAN-ADV networking
       shell: |
-        ip link set wlan0 down
-        iw dev wlan0 set type ibss
-        iw dev wlan0 ibss join MANET-NETWORK 2437
-        ip link set wlan0 up
+        ip link set {{ wifi_interface }} mtu 1500
+        batctl if add {{ wifi_interface }}
+        ip link set {{ batman_interface }} up
 
-    - name: Add wlan0 to BATMAN-ADV
-      shell: |
-        batctl if add wlan0
-        ip link set bat0 up
+    - name: Assign static IP to bat0
+      shell: ip addr add {{ manet_ip }}/24 dev {{ batman_interface }}
 
-    - name: Enable Avahi daemon for hostname resolution
+    - name: Verify MANET network
+      shell: batctl n
+      register: batctl_n_output
+    - debug:
+        msg: "{{ batctl_n_output.stdout_lines }}"
+
+    - name: Configure Avahi daemon
+      template:
+        src: avahi-daemon.conf.j2
+        dest: /etc/avahi/avahi-daemon.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart Avahi
+
+    - name: Enable and start Avahi service
       systemd:
         name: avahi-daemon
         enabled: yes
         state: started
 
+    - name: Make network settings persistent
+      template:
+        src: adhoc-mesh.j2
+        dest: /etc/network/interfaces.d/adhoc-mesh
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Set script permissions
+      file:
+        path: /etc/network/interfaces.d/adhoc-mesh
+        mode: "0755"
+
   handlers:
-    - name: Apply netplan
-      command: netplan apply
+    - name: Restart Avahi
+      systemd:
+        name: avahi-daemon
+        state: restarted

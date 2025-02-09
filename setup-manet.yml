@@ -1,0 +1,73 @@
+---
+- name: Setup BATMAN-ADV MANET on Raspberry Pis
+  hosts: manet_nodes
+  become: true
+  tasks:
+    - name: Install required packages
+      apt:
+        name: 
+          - batctl
+          - avahi-daemon
+          - iproute2
+          - iw
+          - net-tools
+          - alfred
+        state: present
+        update_cache: yes
+
+    - name: Enable BATMAN-ADV kernel module
+      lineinfile:
+        path: /etc/modules
+        line: "batman-adv"
+        state: present
+
+    - name: Load BATMAN-ADV kernel module
+      command: modprobe batman-adv
+
+    - name: Configure Wi-Fi as Ad-Hoc mode
+      copy:
+        dest: /etc/netplan/50-cloud-init.yaml
+        content: |
+          network:
+            version: 2
+            renderer: networkd
+            ethernets:
+              eth0:
+                dhcp4: true
+                optional: true
+            wifis:
+              wlan0:
+                dhcp4: no
+                dhcp6: no
+                addresses: []
+                link-local: []
+                optional: true
+                access-points:
+                  "MANET-NETWORK":
+                    mode: adhoc
+                    password: "123456789"
+                    band: 2.4GHz
+                    channel: 6
+      notify: Apply netplan
+
+    - name: Set Wi-Fi interface type to IBSS (Ad-Hoc)
+      shell: |
+        ip link set wlan0 down
+        iw dev wlan0 set type ibss
+        iw dev wlan0 ibss join MANET-NETWORK 2437
+        ip link set wlan0 up
+
+    - name: Add wlan0 to BATMAN-ADV
+      shell: |
+        batctl if add wlan0
+        ip link set bat0 up
+
+    - name: Enable Avahi daemon for hostname resolution
+      systemd:
+        name: avahi-daemon
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Apply netplan
+      command: netplan apply

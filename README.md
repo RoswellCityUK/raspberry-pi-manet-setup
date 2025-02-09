@@ -4,12 +4,14 @@
 
 Before starting, ensure you have:
 
-- A Raspberry Pi 4 or 5 with Ubuntu 22.04 Server (arm64) installed.
+- A Raspberry Pi 4 or 5 with Ubuntu 22.04 Server (arm64), or newer installed on all devices.
 - SSH access enabled or a monitor and keyboard attached.
 - A working internet connection (for package installation).
 - Basic knowledge of Linux commands.
 
 ## Step 1: Enable Wi-Fi Ad Hoc Mode
+
+This steps have to be followed for each Raspberry PI that will be connected to the network. Remember to update each node name or node IP address for each node.
 
 1. **Update and upgrade packages**:
 
@@ -43,6 +45,8 @@ Before starting, ensure you have:
 
 4. **Disable and reconfigure the Wi-Fi interface**:
 
+    We need to set our wireless interface to work in IBSS mode, which support Ad-Hoc networks.
+
     ```bash
     sudo ip link set wlan0 down
     sudo iw dev wlan0 set type ibss
@@ -68,13 +72,13 @@ Before starting, ensure you have:
 
     ```bash
     Interface wlan0
-            ifindex 3
-            wdev 0x1
-            addr xx:xx:xx:xx:xx:xx
-            ssid MANET-NET
-            type IBSS
-            channel 1 (2412 MHz), width: 20 MHz, center1: 2412 MHz
-            txpower 31.00 dBm
+        ifindex 3
+        wdev 0x1
+        addr xx:xx:xx:xx:xx:xx
+        ssid MANET-NET
+        type IBSS
+        channel 1 (2412 MHz), width: 20 MHz, center1: 2412 MHz
+        txpower 31.00 dBm
     ```
 
 ## Step 2: Set Up BATMAN-ADV
@@ -255,6 +259,27 @@ To make the MANET setup persistent across reboots:
     ```bash
     sudo chmod +x /etc/network/interfaces.d/adhoc-mesh
     ```
+
+## Possible extensions in the future
+
+1. Adding advanced security features to the network:
+   - Implement VPN tunnels for encrypted communication.
+   - Use firewall rules to restrict access.
+   - Deploy intrusion detection systems (IDS) for anomaly detection.
+2. Visualization of the network
+   - Develop a web-based dashboard to monitor network traffic and topology.
+   - Use tools like Grafana, Prometheus, or Vis.js for real-time visualization.
+3. Automated Node Configuration
+   - Create a script to automate network configuration on new nodes - Ansible.
+   - Implement dynamic IP allocation using a lightweight DHCP service.
+4. Optimized Performance
+   - Experiment with different Wi-Fi channels to reduce interference.
+   - Configure Quality of Service (QoS) settings to prioritize critical data.
+   - Test different routing protocols for better performance.
+5. Service Hosting on MANET
+   - Deploy distributed applications like chat servers or file sharing.
+   - Run containerized applications (Docker) for lightweight services.
+   - Integrate solution similar to MicroK8s clusters to deploy services across network.
 
 ## Conclusion
 

@@ -1,0 +1,25 @@
+---
+- name: Setup BATMAN-ADV Mesh Routing
+  hosts: manet_nodes
+  become: true
+  vars:
+    wifi_interface: "{{ hostvars[inventory_hostname]['wifi_interface'] }}"
+    batman_interface: "bat0"
+
+  tasks:
+    - name: Load BATMAN-ADV kernel module
+      modprobe:
+        name: batman-adv
+        state: present
+
+    - name: Ensure BATMAN-ADV loads on boot
+      lineinfile:
+        path: /etc/modules
+        line: "batman-adv"
+        state: present
+
+    - name: Add Wi-Fi interface to BATMAN-ADV
+      command: batctl if add {{ wifi_interface }}
+
+    - name: Enable BATMAN-ADV interface
+      command: ip link set {{ batman_interface }} up

@@ -1,0 +1,15 @@
+---
+- name: Install Required Packages
+  hosts: manet_nodes
+  become: true
+  tasks:
+    - name: Install essential networking tools
+      apt:
+        name:
+          - batctl
+          - iw
+          - net-tools
+          - avahi-daemon
+          - avahi-utils
+        state: present
+      tags: install

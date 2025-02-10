@@ -1,0 +1,10 @@
+---
+- name: Update and Upgrade Packages
+  hosts: manet_nodes
+  become: true
+  tasks:
+    - name: Update package lists
+      apt:
+        update_cache: yes
+        upgrade: dist
+      tags: update

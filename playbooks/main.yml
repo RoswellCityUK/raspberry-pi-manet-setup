@@ -1,6 +1,0 @@
-- import_playbook: update-packages.yml
-- import_playbook: install-packages.yml
-- import_playbook: configure-network.yml
-- import_playbook: setup-batman.yml
-- import_playbook: configure-avahi.yml
-- import_playbook: verify-connectivity.yml

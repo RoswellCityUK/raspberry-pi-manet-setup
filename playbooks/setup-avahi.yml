@@ -1,0 +1,45 @@
+---
+- name: Setup Avahi on all nodes
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    avahi_config_path: "/etc/avahi/avahi-daemon.conf"
+    avahi_hostname: "{{ inventory_hostname }}"   # Uses the node's inventory name as hostname
+    avahi_domain: "{{ adhoc_ssid }}"
+    avahi_interface: "bat0"
+    avahi_rate_interval: "1000000"
+    avahi_rate_burst: "1000"
+
+  tasks:
+    - name: Install Avahi and required packages
+      apt:
+        name:
+          - avahi-daemon
+          - avahi-utils
+        state: present
+        update_cache: yes
+
+    - name: Configure Avahi daemon
+      template:
+        src: avahi-daemon.conf.j2
+        dest: "{{ avahi_config_path }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Restart Avahi service
+      systemd:
+        name: avahi-daemon
+        state: restarted
+        enabled: yes
+
+    - name: Verify Avahi service status
+      command: systemctl is-active avahi-daemon
+      register: avahi_status
+      changed_when: false
+
+    - name: Display Avahi status
+      debug:
+        msg: "Avahi-daemon is {{ avahi_status.stdout }} on {{ inventory_hostname }}"

@@ -1,0 +1,91 @@
+#!/bin/bash
+set -e
+
+# Trap errors and print the line and command that failed
+trap 'echo "Error on line $LINENO: $BASH_COMMAND" >&2' ERR
+
+echo "==== Starting batman-adv configuration script ===="
+
+{# Conditionally reload the brcmfmac module only if the hostname contains 'rpi2w' #}
+{% if 'rpi2w' in inventory_hostname %}
+echo "Detected Raspberry Pi 2W - reloading brcmfmac module to free wireless interface..."
+sudo modprobe -r brcmfmac
+sudo modprobe brcmfmac
+echo "brcmfmac module reloaded."
+{% endif %}
+
+echo "Loading batman-adv module..."
+modprobe batman-adv
+echo "batman-adv module loaded."
+
+max_attempts=30
+attempt=0
+
+while true; do
+    echo "---- Starting batman-adv configuration attempt $((attempt+1)) ----"
+
+    echo "Waiting for wireless interface '{{ detected_wifi_iface }}' to become available (timeout 30s)..."
+    timeout=30
+    while ! ip link show {{ detected_wifi_iface }} &>/dev/null; do
+        echo "Interface {{ detected_wifi_iface }} not found, sleeping 1 second..."
+        sleep 1
+        timeout=$((timeout - 1))
+        if [ $timeout -le 0 ]; then
+            echo "Timeout waiting for interface {{ detected_wifi_iface }}. Exiting."
+            exit 1
+        fi
+    done
+    echo "Interface '{{ detected_wifi_iface }}' is now available."
+
+    echo "Bringing down interface '{{ detected_wifi_iface }}'..."
+    ip link set {{ detected_wifi_iface }} down
+
+    echo "Setting interface '{{ detected_wifi_iface }}' to IBSS mode..."
+    iw dev {{ detected_wifi_iface }} set type ibss
+
+    echo "Bringing up interface '{{ detected_wifi_iface }}'..."
+    ip link set {{ detected_wifi_iface }} up
+
+    echo "Joining IBSS network with SSID '{{ adhoc_ssid }}' and frequency {{ adhoc_freq }}..."
+    iw dev {{ detected_wifi_iface }} ibss join "{{ adhoc_ssid }}" {{ adhoc_freq }}
+
+    echo "Setting MTU for '{{ detected_wifi_iface }}' to 1500..."
+    ip link set {{ detected_wifi_iface }} mtu 1500
+
+    echo "Adding interface '{{ detected_wifi_iface }}' to batman-adv..."
+    batctl if add {{ detected_wifi_iface }}
+
+    echo "Bringing up batman-adv interface '{{ batman_interface }}'..."
+    ip link set {{ batman_interface }} up
+
+    echo "Flushing addresses on '{{ batman_interface }}'..."
+    ip addr flush dev {{ batman_interface }}
+
+    echo "Assigning IP {{ manet_ip }}/{{ manet_netmask }} to '{{ batman_interface }}'..."
+    ip addr add {{ manet_ip }}/{{ manet_netmask }} dev {{ batman_interface }}
+
+    # Uncomment the following line if you need to add a default route via the batman interface
+    # echo "Adding default route via '{{ batman_interface }}'..."
+    # ip route add default dev {{ batman_interface }}
+
+    echo "Checking batman-adv interface status with 'batctl n'..."
+    output=$(sudo batctl n 2>&1 || true)
+    echo "batctl n output:"
+    echo "$output"
+
+    if echo "$output" | grep -q "No such file or directory" || echo "$output" | grep -q "BATMAN mesh"; then
+        echo "Error detected in batctl n output. Retrying configuration..."
+        attempt=$((attempt + 1))
+        if [ $attempt -ge $max_attempts ]; then
+            echo "Maximum attempts reached. Exiting with error."
+            exit 1
+        fi
+        sleep 5
+        continue
+    else
+        echo "batman-adv interface configured successfully."
+        break
+    fi
+done
+
+echo "==== batman-adv configuration script completed successfully ===="

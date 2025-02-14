@@ -1,0 +1,60 @@
+---
+- name: Generate and distribute SSH key for passwordless login
+  hosts: all
+  gather_facts: false
+
+  vars_prompt:
+    - name: "ansible_ssh_pass"
+      prompt: "Enter SSH password for remote hosts"
+      private: true
+
+  vars:
+    ansible_ssh_private_key_file: ""
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+  tasks:
+    - name: Ensure .ssh directory exists on control machine
+      file:
+        path: "{{ lookup('env','HOME') }}/.ssh"
+        state: directory
+        mode: '0700'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Check if the public key already exists on control machine
+      stat:
+        path: "{{ lookup('env','HOME') }}/.ssh/id_rsa_manet.pub"
+      delegate_to: localhost
+      run_once: true
+      register: ssh_key_stat
+
+    - name: Generate an SSH key pair on control machine if it does not exist
+      openssh_keypair:
+        path: "{{ lookup('env','HOME') }}/.ssh/id_rsa_manet"
+        type: rsa
+        size: 2048
+      delegate_to: localhost
+      run_once: true
+      when: not ssh_key_stat.stat.exists
+
+    - name: Read the generated public key on control machine
+      slurp:
+        src: "{{ lookup('env','HOME') }}/.ssh/id_rsa_manet.pub"
+      delegate_to: localhost
+      run_once: true
+      register: pubkey_contents
+
+    - name: Install the public key in the remote user's authorized_keys
+      authorized_key:
+        user: "{{ ansible_user }}"
+        key: "{{ pubkey_contents.content | b64decode }}"
+
+- name: Test key-based authentication connectivity
+  hosts: all
+  gather_facts: false
+  vars:
+    ansible_ssh_pass: ""
+    ansible_ssh_private_key_file: "{{ lookup('env','HOME') }}/.ssh/id_rsa_manet"
+  tasks:
+    - name: Ping remote host to test key-based authentication
+      ping:

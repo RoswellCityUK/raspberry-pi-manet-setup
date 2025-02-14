@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+echo "[$(date)] Starting batman-adv monitor script..."
+
+while true; do
+    echo "[$(date)] Checking batman-adv status..."
+    output=$(sudo batctl n 2>&1 || true)
+    echo "[$(date)] batctl n output:"
+    echo "$output"
+
+    if echo "$output" | grep -q "No such file or directory" || echo "$output" | grep -q "BATMAN mesh"; then
+        echo "[$(date)] Error detected in batctl output. Restarting {{ batman_adhoc_service | default('batman-adhoc.service') }}..."
+        systemctl restart {{ batman_adhoc_service | default('batman-adhoc.service') }}
+    else
+        echo "[$(date)] batctl output is correct."
+    fi
+
+    sleep {{ monitor_interval | default(30) }}
+done

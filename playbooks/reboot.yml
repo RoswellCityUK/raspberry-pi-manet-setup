@@ -1,0 +1,9 @@
+---
+- name: Reboot all devices
+  hosts: all
+  become: true
+  tasks:
+    - name: Reboot the system
+      reboot:
+        msg: "Reboot triggered by Ansible"
+        reboot_timeout: 300

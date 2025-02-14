@@ -1,0 +1,12 @@
+[Unit]
+Description=Monitor batman-adv mesh and restart batman-adhoc service if errors are detected
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart={{ monitor_script }}
+Restart=always
+RestartSec={{ monitor_restart_sec | default(30) }}
+
+[Install]
+WantedBy=multi-user.target

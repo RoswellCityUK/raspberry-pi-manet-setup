@@ -1,11 +1,11 @@
 [server]
-host-name={{ inventory_hostname }}
-domain-name=manet-local
+host-name={{ avahi_hostname }}
+domain-name={{ avahi_domain }}
 use-ipv4=yes
 use-ipv6=no
-allow-interfaces={{ wifi_interface }}
-ratelimit-interval-usec=1000000
-ratelimit-burst=1000
+allow-interfaces={{ avahi_interface }}
+ratelimit-interval-usec={{ avahi_rate_interval }}
+ratelimit-burst={{ avahi_rate_burst }}
 
 [wide-area]
 enable-wide-area=no

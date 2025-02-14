@@ -1,25 +1,122 @@
 ---
-- name: Setup BATMAN-ADV Mesh Routing
-  hosts: manet_nodes
+- name: Configure ad hoc batman-adv network on all nodes
+  hosts: all
   become: true
+  gather_facts: true
   vars:
-    wifi_interface: "{{ hostvars[inventory_hostname]['wifi_interface'] }}"
-    batman_interface: "bat0"
+    # Package management
+    required_packages:
+      - iw
+      - batctl
+      - net-tools
+
+    # Paths
+    script_dir: "/usr/local/bin"
+    systemd_dir: "/etc/systemd/system"
+
+    # Services
+    batman_adhoc_service: "batman-adhoc.service"
+    batman_monitor_service: "monitor-batman.service"
+
+    # Script & service names
+    batman_script: "{{ script_dir }}/setup_batman.sh"
+    batman_boot_service: "{{ systemd_dir }}/{{ batman_adhoc_service }}"
+    monitor_script: "{{ script_dir }}/monitor_batman.sh"
+    monitor_service: "{{ systemd_dir }}/{{ batman_monitor_service}}"
+
+    # Monitoring settings
+    monitor_interval: 30
+    monitor_restart_sec: 30
 
   tasks:
-    - name: Load BATMAN-ADV kernel module
-      modprobe:
-        name: batman-adv
+    - name: Install required packages
+      apt:
+        name: "{{ required_packages }}"
         state: present
+        update_cache: yes
 
-    - name: Ensure BATMAN-ADV loads on boot
-      lineinfile:
-        path: /etc/modules
-        line: "batman-adv"
+    - name: Install linux-modules-extra for Raspberry Pi 2W
+      apt:
+        name: "linux-modules-extra-{{ ansible_kernel }}"
         state: present
+      when: "'rpi2w' in inventory_hostname"
 
-    - name: Add Wi-Fi interface to BATMAN-ADV
-      command: batctl if add {{ wifi_interface }}
+    - name: Detect available wireless interface
+      shell: "iw dev | awk '/Interface/ {print $2; exit}'"
+      register: wireless_iface_result
+      changed_when: false
 
-    - name: Enable BATMAN-ADV interface
-      command: ip link set {{ batman_interface }} up
+    - name: Fail if no wireless interface detected
+      fail:
+        msg: "No wireless interface detected on this host."
+      when: wireless_iface_result.stdout == ""
+
+    - name: Store detected wireless interface as a fact
+      set_fact:
+        detected_wifi_iface: "{{ wireless_iface_result.stdout }}"
+
+    - name: Debug detected wireless interface
+      debug:
+        msg: "Detected wireless interface: {{ detected_wifi_iface }}"
+
+    - name: Check if wireless interface supports IBSS (ad-hoc) mode
+      shell: "iw list"
+      register: iw_list_result
+      changed_when: false
+
+    - name: Fail if IBSS mode is not supported
+      fail:
+        msg: "The wireless interface {{ detected_wifi_iface }} does not support IBSS (ad-hoc) mode."
+      when: "'IBSS' not in iw_list_result.stdout"
+
+    - name: Deploy batman-adv setup script
+      template:
+        src: setup_batman.sh.j2
+        dest: "{{ batman_script }}"
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Deploy batman-adhoc systemd service
+      template:
+        src: batman-adhoc.service.j2
+        dest: "{{ batman_boot_service }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Deploy batman-adv monitoring script
+      template:
+        src: monitor_batman.sh.j2
+        dest: "{{ monitor_script }}"
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Deploy monitor systemd service
+      template:
+        src: monitor-batman.service.j2
+        dest: "{{ monitor_service }}"
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable batman-adhoc service at boot
+      systemd:
+        name: "{{ batman_adhoc_service }}"
+        enabled: yes
+
+    - name: Start (or restart) batman-adhoc service
+      systemd:
+        name: "{{ batman_adhoc_service }}"
+        state: restarted
+
+    - name: Enable and start monitor-batman service
+      systemd:
+        name: "monitor-batman.service"
+        enabled: yes
+        state: started

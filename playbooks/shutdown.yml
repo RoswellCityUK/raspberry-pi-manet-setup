@@ -1,0 +1,9 @@
+---
+- name: Shutdown all devices
+  hosts: all
+  become: true
+  tasks:
+    - name: Shutdown the system
+      command: shutdown -h now
+      async: 0
+      poll: 0

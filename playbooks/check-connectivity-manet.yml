@@ -1,0 +1,32 @@
+---
+- name: Ping each node from every other node in the MANET network
+  hosts: all
+  become: false
+  gather_facts: false
+
+  vars:
+    manet_nodes: "{{ groups['all'] | map('extract', hostvars, 'manet_ip') | list }}"
+
+  tasks:
+    - name: Debug - Show MANET node list
+      debug:
+        msg: "MANET Nodes: {{ manet_nodes }}"
+
+    - name: Ping each node from each node
+      command: "ping -c 3 {{ item }}"
+      register: ping_results
+      changed_when: false
+      failed_when: false
+      loop: "{{ manet_nodes }}"
+      when: item != ansible_host
+
+    - name: Display formatted ping results
+      debug:
+        msg: |
+          {{ inventory_hostname }} -> {{ item_result.item }}
+          Status: {{ 'Success' if item_result.rc == 0 else 'Failed' }}
+          RTT (min/avg/max/mdev): {{ item_result.stdout_lines | select('search', 'rtt') | list | first | regex_replace('rtt min/avg/max/mdev = ', '') }}
+      loop: "{{ ping_results.results }}"
+      loop_control:
+        loop_var: item_result
+

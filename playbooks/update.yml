@@ -1,0 +1,14 @@
+---
+- name: Update and upgrade all apt packages on all hosts
+  hosts: all
+  become: true
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600  # Cache is valid for 1 hour
+
+    - name: Upgrade packages with full-upgrade and autoremove
+      apt:
+        upgrade: full
+        autoremove: yes
